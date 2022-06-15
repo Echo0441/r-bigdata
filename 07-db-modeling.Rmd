@@ -1,0 +1,237 @@
+```{r db-modeling, include = FALSE}
+eval_model <- FALSE
+if(Sys.getenv("GLOBAL_EVAL") != "") eval_model <- Sys.getenv("GLOBAL_EVAL")
+```
+
+```{r, eval = eval_model, include = FALSE}
+library(tidymodels)
+library(yaml)
+library(modeldb)
+library(dbplot)
+library(pins)
+library(dbplyr)
+library(RPostgres)
+library(connections)
+library(config)
+```
+
+# Modeling with databases
+
+## Single step sampling
+*Use PostgreSQL TABLESAMPLE clause*
+
+1. Use `connection_open()` to open a Database connection
+    ```{r, eval = eval_model}
+    con <- connection_open(
+      RPostgres::Postgres(),
+      host =  "localhost",
+      user = get("user"),
+      password = get("pwd"),
+      port = 5432,
+      dbname = "postgres",
+      bigint = "integer"
+    )
+    ```
+
+2. Set the `orders` variable to point to the **orders** table
+    ```{r, eval = eval_model}
+    orders <- tbl(con, in_schema("retail", "orders"))
+    ```
+
+3. Set the `orders_view` variable to point to the **v_orders** table
+    ```{r, eval = eval_model}
+    
+    ```
+
+4. Pipe `orders` into the function `show_query()`
+    ```{r, eval = eval_model}
+    
+    ```
+
+5. Pipe the previous command into the `class()` function to see the kind of output `show_query()` returns
+    ```{r, eval = eval_model}
+    
+    ```
+
+6. Replace `show_query()` with `remote_query()` to compare the output types
+    ```{r, eval = eval_model}
+
+    ```
+
+7. Replace `class()` with `build_sql()`.  Use `con` as the value for the `con` argument
+    ```{r, eval = eval_model}
+
+    ```
+
+8. Add *" TABLESAMPLE BERNOULLI (0.1)"* to `build_sql()` as another `...` argument
+    ```{r, eval = eval_model}
+
+    ```
+
+9. Pipe the code into `tbl()`.  Use `con` for the `con` argument, and `.` for the rest
+    ```{r, eval = eval_model}
+
+    ```
+
+10. Use `inner_join()` to add the information from the `orders_view` pointer, use `order_id` as the matching field
+    ```{r, eval = eval_model}
+
+    ```
+
+11. Assign the resulting code to a variable `orders_sample_db`
+    ```{r, eval = eval_model}
+    orders_sample_db <- 
+    ```
+
+12. Use `collect()` to load the results of `orders_sample_db` to a new variable called `orders_sample`
+    ```{r, eval = eval_model}
+    orders_sample <- collect(orders_sample_db)
+    ```
+
+13. Load the `dbplot` library
+    ```{r, eval = eval_model}
+    library(dbplot)
+    ```
+
+14. Use `dbplot_histogram()` to visualize the distribution of `order_total` from `orders_sample` 
+    ```{r, eval = eval_model}
+    orders_sample %>% 
+      dbplot_histogram(order_total, binwidth = 5)
+    ```
+
+15. Use `dbplot_histogram()` to visualize the distribution of `order_total` from `orders_view`
+    ```{r, eval = eval_model}
+    orders_view %>% 
+      dbplot_histogram(order_total, binwidth = 5)
+    ```
+
+## Using `tidymodels` for modeling
+*Fit and measure the model's performance using functions from `parsnip` and `yardstick`*
+
+1. Load the `tidymodels` library
+    ```{r, eval = eval_model}
+    library(tidymodels)
+    ```
+
+2. Start with the `linear_reg()` command, pipe into `set_engine()`, and use *"lm"* as its sole argument
+    ```{r, eval = eval_model}
+
+    ```
+
+3. Pipe into the `fit()` command. Use the formula: `order_total ~ order_qty`, and `orders_sample` as the `data` argument
+    ```{r, eval = eval_model}
+    ```
+
+4. Assign the previous code to a variable called `parsnip_model`
+    ```{r, eval = eval_model}
+    parsnip_model <- 
+    ```
+
+5. Use `bind_cols()` to add the predictions to `order_sample`.  Calculate the prediction with `predict()`
+    ```{r, eval = eval_model}
+    orders_sample %>% 
+      bind_cols(predict(parsnip_model, orders_sample))
+    ```
+
+6. Pipe the code into the `metrics()` function.  Use `order_total` as the `truth` argument, and `.pred` as the `estimate` argument
+    ```{r, eval = eval_model}
+    
+    ```
+
+## Score with `tidypredict`
+
+1. Load the `tidypredict` library
+    ```{r, eval = eval_model}
+    library(tidypredict)
+    ```
+
+
+2. Use the `parse_model()` function to parse `parsnip_model`, and assign it to a variable called `parsed_parsnip`
+    ```{r, eval = eval_model}
+    
+    ```
+
+3. Use `str()` to see the `parsed_parsnip` object's structure
+    ```{r, eval = eval_model}
+    
+    ```
+
+4. Use `tidypredict_fit()` to view the `dplyr` formula that calculates the prediction 
+    ```{r, eval = eval_model}
+    
+    ```
+
+5. Use `head()` to get the first 10 records from `orders_view`
+    ```{r, eval = eval_model}
+    orders_view %>%
+      head(10)
+    ```
+
+6. Pipe the code into `mutate()`.  Assign to a new `my_pred` variable the results of `tidypredict_fit()`.  Make sure to prefix `tidypredict_fit()` with the bang-bang operator so that the formula is evaluated. 
+    ```{r, eval = eval_model}
+    orders_view %>%
+      head(10) %>%
+      
+    ```
+
+7. Replace the `mutate()` command with `tidypredict_to_column()`
+    ```{r, eval = eval_model}
+    orders_view %>%
+      head(10) %>%
+      tidypredict_to_column(parsnip_model)
+    ```
+
+8. Load the `yaml` library
+    ```{r, eval = eval_model}
+    library(yaml)
+    ```
+
+9. Use `write_yaml()` to save the contents of `parsed_parsnip` into a file called **model.yaml**
+    ```{r, eval = eval_model}
+    
+    ```
+    
+10. Using `read_yaml()`, read the contents of the **model.yaml** file into the a new variable called `loaded_model`
+    ```{r, eval = eval_model}
+    
+    ```
+
+11. Use `as_parsed_model()` to convert the `loaded_model` variable into a `tidypredict` parsed model object, assign the results to `loaded_model_2`
+    ```{r, eval = eval_model}
+    loaded_model_2 <- as_parsed_model(loaded_model)
+    ```
+
+## Run predictions in DB
+
+1. Load the `modeldb` library
+    ```{r, eval = eval_model}
+    library(modeldb)
+    ```
+
+2. Use `select()` to pick the `order_total` and `order_qty` fields from the `orders_sample_db` table pointer
+    ```{r, eval = eval_model}
+    orders_sample_db %>%
+      select(order_total, order_qty) 
+    ```
+
+3. Pipe the code into the `linear_regression_db()` function, pass `order_total` as the only argument
+    ```{r, eval = eval_model}
+    orders_sample_db %>%
+      select(order_total, order_qty) %>% 
+      
+    ```
+
+4. Assign the model results to a new variable called `db_model`
+    ```{r, eval = eval_model}
+    db_model <- 
+    ```
+
+5. Use `as_parsed_model()` to convert `db_model` to a parsed model object. Assign to new a variable called `pm`
+    ```{r, eval = eval_model}
+    
+    ```
+
+6. Use `head()` to get the top 10 records, and then pipe into `tidypredict_to_column()` to add the results from `pm`
+    ```{r, eval = eval_model}
+    
+    ```

@@ -1,0 +1,152 @@
+```{r db-analysis, include = FALSE}
+eval_db <- FALSE
+if(Sys.getenv("GLOBAL_EVAL") != "") eval_db <- Sys.getenv("GLOBAL_EVAL")
+```
+
+```{r, eval = eval_db, include = FALSE}
+library(connections)
+library(RSQLite)
+library(dplyr)
+library(dbplyr)
+library(config)
+```
+
+# Databases and `dplyr`
+
+## Intro to `connections`
+*Use `connections` to open open a database connection*
+
+1. Load the `connections` package
+    ```{r, eval = eval_db}
+    library(connections)
+    library(config)
+    ```
+
+2. Use `connection_open()` to open a Database connection
+    ```{r, eval = eval_db}
+    con <- connection_open(
+      RPostgres::Postgres(),
+      host =  "localhost",
+      user = get("user", config = "dev"),
+      password = get("pwd", config = "dev"),
+      port = 5432,
+      dbname = "postgres",
+      bigint = "integer"
+    )
+    ```
+    
+3. The RStudio Connections pane should show the tables in the database
+
+## Table reference
+*Use the `dplyr`'s `tbl()` command*
+
+1. Load the `dplyr` package
+    ```{r, eval = eval_db}
+    library(dplyr)
+    ```
+
+2. Add `in_schema()` as an argument to `tbl()` to specify the schema
+    ```{r, eval = eval_db}
+    tbl(con, in_schema("retail", "customer"))
+    ```
+
+3. Load the results from the `tbl()` command that points the table called **orders** to a variable called `orders` 
+    ```{r, eval = eval_db}
+    
+    ```
+    
+4. Use the `class` function to determine the object type of `orders`
+    ```{r}
+    
+    ```
+
+## Under the hood 
+*Use `show_query()` to preview the SQL statement that will be sent to the database*
+
+1. Use `show_query()` to preview SQL statement that actually runs when we run `orders` as a command
+    ```{r, eval = eval_db}
+    
+    ```
+    
+2. When executed, `orders` returns the first 1000 rows of the remote **orders** table
+    ```{r}
+    orders
+    ```
+
+3. Full results of a remote query can be brought into R with `collect`
+    ```{r}
+    local_orders <- collect(orders)
+    ```
+
+4. Easily view the resulting query by adding `show_query()` in another piped command
+    ```{r, eval = eval_db}
+    
+    ```
+
+5. Insert `head()` in between the two statements to see how the SQL changes
+    ```{r, eval = eval_db}
+    
+    ```
+    
+6. Queries can be assigned to variables. Create a variable called `orders_head` that contains the previous query
+    ```{r}
+    
+    ```
+
+7. Use `sql_render()` and `simulate_mssql()` to see how the SQL statement changes from vendor to vendor
+    ```{r, eval = eval_db}
+    
+    ```
+
+8. Use `explain()` to explore the query plan
+    ```{r, eval = eval_db}
+    
+    ```
+    
+## Un-translated R commands
+*Review of how `dbplyr` handles R commands that have not been translated into a like-SQL command*
+
+1. Preview how `mean` is translated
+    ```{r}
+    orders %>% 
+      mutate(avg_id = mean(order_id, na.rm = TRUE)) %>% 
+      show_query()
+    ```
+
+2. Preview how `Sys.Date()` is translated
+    ```{r, eval = eval_db}
+    
+    ```
+
+3. Use PostgreSQL native commands, in this case `date`
+    ```{r, eval = eval_db}
+    orders %>%
+      mutate(today = date('now')) %>%
+      show_query()
+    ```
+
+4. Run the `dplyr` code to confirm it works
+    ```{r, eval = eval_db}
+    
+    ```
+
+## Using bang-bang
+*Intro on passing unevaluated code to a dplyr verb*
+
+1. Preview how `Sys.Date()` is translated when prefixing `!!`
+    ```{r, eval = eval_db}
+    
+    ```
+
+2. View resulting table when `Sys.Date()` is translated when prefixing `!!`
+    ```{r, eval = eval_db}
+    orders %>%
+      mutate(today = !!Sys.Date()) %>%
+      head()
+    ```
+
+3. Disconnect from the database using `connection_close`
+    ```{r}
+    connection_close(con)
+    ```
+
